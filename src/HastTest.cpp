@@ -4,7 +4,7 @@
 
 void testSingleThreadStringKey()
 {
-  CTSL::HashMap<std::string, int> stringMap(1001);
+  CTSL::HashMap<std::string, int> stringMap(2048);
 
   stringMap.insert("test1", 200);
   stringMap.insert("test2", 670);
@@ -71,7 +71,7 @@ void testSingleThreadStringKey()
 
 void testSingleThreadIntegerKey()
 {
-  CTSL::HashMap<int, int> integerMap(29);
+  CTSL::HashMap<int, int> integerMap(32);
 
   integerMap.insert(10, 200);
   integerMap.insert(20, 670);
