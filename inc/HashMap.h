@@ -4,6 +4,7 @@
 #include "HashBucket.h"
 #include <cstdint>
 #include <functional>
+#include <cassert>
 #include <iostream>
 #include <mutex>
 
@@ -23,6 +24,9 @@ template <typename K, typename V, typename HASH = std::hash<K>> class HashMap
 public:
   HashMap(size_t hashSize_ = HASH_SIZE_DEFAULT) : hashSize(hashSize_)
   {
+    assert(hashSize_ > 0 && "Hash size muste be > 0");
+    assert((hashSize_ & (hashSize_ - 1)) == 0 && "Hash size must be power of 2");
+
     hashTable = new HashBucket<K, V>[hashSize]; // create the hash table as an array of hash buckets
   }
 
