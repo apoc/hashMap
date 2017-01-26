@@ -7,7 +7,7 @@
 #include <iostream>
 #include <mutex>
 
-constexpr size_t HASH_SIZE_DEFAULT = 1031;      // A prime number as hash size gives a better distribution of values in buckets
+constexpr size_t HASH_SIZE_DEFAULT = 2048;
 namespace CTSL // Concurrent Thread Safe Library
 {
 // The class representing the hash map.
@@ -18,7 +18,7 @@ namespace CTSL // Concurrent Thread Safe Library
 // Each hash bucket is implemented as singly linked list with the head as a dummy node created
 // during the creation of the bucket. All the hash buckets are created during the construction of the map.
 // Locks are taken per bucket, hence multiple threads can write simultaneously in different buckets in the hash map
-template <typename K, typename V, typename F = std::hash<K>> class HashMap
+template <typename K, typename V, typename HASH = std::hash<K>> class HashMap
 {
 public:
   HashMap(size_t hashSize_ = HASH_SIZE_DEFAULT) : hashSize(hashSize_)
@@ -41,7 +41,7 @@ public:
   // If key is not found, function returns false.
   bool find(const K &key, V &value) const
   {
-    size_t hashValue = hashFn(key) % hashSize;
+    const size_t hashValue = HASH()(key) & (hashSize - 1); // Only for hash size power of 2
     return hashTable[hashValue].find(key, value);
   }
 
@@ -49,14 +49,14 @@ public:
   // If key already exists, update the value, else insert a new node in the bucket with the <key, value> pair.
   void insert(const K &key, const V &value)
   {
-    size_t hashValue = hashFn(key) % hashSize;
+    const size_t hashValue = HASH()(key) & (hashSize - 1); // Only for hash size power of 2
     hashTable[hashValue].insert(key, value);
   }
 
   // Function to remove an entry from the bucket, if found
   void erase(const K &key)
   {
-    size_t hashValue = hashFn(key) % hashSize;
+    const size_t hashValue = HASH()(key) & (hashSize - 1); // Only for hash size power of 2
     hashTable[hashValue].erase(key);
   }
 
@@ -71,7 +71,6 @@ public:
 
 private:
   HashBucket<K, V> *hashTable;
-  F hashFn;
   const size_t hashSize;
 };
 } // namespace CTSL

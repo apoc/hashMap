@@ -8,17 +8,25 @@
 namespace CTSL // Concurrent Thread Safe Library
 {
 // Class representing a hash bucket. The bucket is implemented as a singly linked list.
-// A bucket is always constructed with a dummy head node
+// The list may be empty; the head node is a real entry (no dummy head node).
 template <typename K, typename V> class HashBucket
 {
 public:
-  HashBucket()
+  HashBucket() : head(nullptr)
   {
   }
 
   ~HashBucket() // delete the bucket
   {
-    clear();
+    std::unique_lock<std::shared_timed_mutex> lock(mutex_); // take a lock before removing the nodes
+
+    while (head)
+    {
+      HashNode<K, V> *next = head->next;
+      delete head;
+
+      head = next;
+    }
   }
 
   // Function to find an entry in the bucket matching the key
@@ -27,7 +35,7 @@ public:
   bool find(const K &key, V &value) const
   {
     // A shared mutex is used to enable mutiple concurrent reads
-    std::shared_lock lock(mutex_);
+    std::shared_lock<std::shared_timed_mutex> lock(mutex_);
     HashNode<K, V> *node = head;
 
     while (node != nullptr)
@@ -47,62 +55,44 @@ public:
   void insert(const K &key, const V &value)
   {
     // Exclusive lock to enable single write in the bucket
-    std::unique_lock lock(mutex_);
-    HashNode<K, V> *prev = nullptr;
-    HashNode<K, V> *node = head;
+    std::unique_lock<std::shared_timed_mutex> lock(mutex_);
+    HashNode<K, V> **node = &head;
 
-    while (node != nullptr && node->getKey() != key)
+    while (*node)
     {
-      prev = node;
-      node = node->next;
+      if ((*node)->getKey() == key)
+      {
+        (*node)->setValue(value); // Key found in bucket, update the value
+        return;
+      }
+      node = &((*node)->next);
     }
 
-    if (nullptr == node) // New entry, create a node and add to bucket
-    {
-      if (nullptr == head)
-      {
-        head = new HashNode<K, V>(key, value);
-      }
-      else
-      {
-        prev->next = new HashNode<K, V>(key, value);
-      }
-    }
-    else
-    {
-      node->setValue(value); // Key found in bucket, update the value
-    }
+    // now node points to the last element's ->next (or head), so the new node can be linked unconditionally
+    *node = new HashNode<K, V>(key, value);
   }
 
   // Function to remove an entry from the bucket, if found
   void erase(const K &key)
   {
     // Exclusive lock to enable single write in the bucket
-    std::unique_lock lock(mutex_);
-    HashNode<K, V> *prev = nullptr;
+    std::unique_lock<std::shared_timed_mutex> lock(mutex_);
     HashNode<K, V> *node = head;
+    HashNode<K, V> **prev = &head;
 
-    while (node != nullptr && node->getKey() != key)
+    while (node)
     {
-      prev = node;
-      node = node->next;
-    }
-
-    if (nullptr == node) // Key not found, nothing to be done
-    {
-      return;
-    }
-    else // Remove the node from the bucket
-    {
-      if (head == node)
+      if (node->getKey() == key)
       {
-        head = node->next;
+        *prev = node->next;
+        delete node;
+        return;
       }
       else
       {
-        prev->next = node->next;
+        prev = &node;
+        node = node->next;
       }
-      delete node; // Free up the memory
     }
   }
 
@@ -110,16 +100,15 @@ public:
   void clear()
   {
     // Exclusive lock to enable single write in the bucket
-    std::unique_lock lock(mutex_);
-    HashNode<K, V> *prev = nullptr;
-    HashNode<K, V> *node = head;
-    while (node != nullptr)
+    std::unique_lock<std::shared_timed_mutex> lock(mutex_);
+
+    while (head)
     {
-      prev = node;
-      node = node->next;
-      delete prev;
+      HashNode<K, V> *toDel = head;
+      delete toDel;
+
+      head = head->next;
     }
-    head = nullptr;
   }
 
 private:
