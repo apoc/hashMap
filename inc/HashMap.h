@@ -4,7 +4,7 @@
 #include "HashBucket.h"
 #include <cstdint>
 #include <functional>
-#include <cassert>
+#include <stdexcept>
 #include <iostream>
 #include <mutex>
 
@@ -14,18 +14,21 @@ namespace CTSL // Concurrent Thread Safe Library
 // The class representing the hash map.
 // It is expected for user defined types, the hash function will be provided.
 // By default, the std::hash function will be used
-// If the hash size is not provided, then a default size of 1031 will be used
+// If the hash size is not provided, then a default size of 2048 will be used.
+// The hash size must be a power of 2; the bucket index is computed as hash & (hashSize - 1),
+// so only the low bits of the hash value are used for bucketing.
 // The hash table itself consists of an array of hash buckets.
-// Each hash bucket is implemented as singly linked list with the head as a dummy node created
-// during the creation of the bucket. All the hash buckets are created during the construction of the map.
+// Each hash bucket is implemented as singly linked list which may be empty; there is no dummy head node.
 // Locks are taken per bucket, hence multiple threads can write simultaneously in different buckets in the hash map
 template <typename K, typename V, typename HASH = std::hash<K>> class HashMap
 {
 public:
   HashMap(size_t hashSize_ = HASH_SIZE_DEFAULT) : hashSize(hashSize_)
   {
-    assert(hashSize_ > 0 && "Hash size muste be > 0");
-    assert((hashSize_ & (hashSize_ - 1)) == 0 && "Hash size must be power of 2");
+    if (hashSize_ == 0 || (hashSize_ & (hashSize_ - 1)) != 0)
+    {
+      throw std::invalid_argument("CTSL::HashMap: hash size must be a power of 2 and non-zero");
+    }
 
     hashTable = new HashBucket<K, V>[hashSize]; // create the hash table as an array of hash buckets
   }

@@ -90,7 +90,7 @@ public:
       }
       else
       {
-        prev = &node;
+        prev = &node->next;
         node = node->next;
       }
     }
@@ -104,10 +104,10 @@ public:
 
     while (head)
     {
-      HashNode<K, V> *toDel = head;
-      delete toDel;
+      HashNode<K, V> *next = head->next;
+      delete head;
 
-      head = head->next;
+      head = next;
     }
   }
 
