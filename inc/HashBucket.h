@@ -38,7 +38,7 @@ public:
     std::shared_lock<std::shared_timed_mutex> lock(mutex_);
     HashNode<K, V> *node = head;
 
-    while (node != nullptr)
+    while (node)
     {
       if (node->getKey() == key)
       {
@@ -50,9 +50,10 @@ public:
     return false;
   }
 
-  // Function to insert into the bucket
-  // If key already exists, update the value, else insert a new node in the bucket with the <key, value> pair
-  void insert(const K &key, const V &value)
+  // Function to insert into the bucket.
+  // If key already exists, update the value, else insert a new node in the bucket.
+  // Returns true if a new node was created, false if an existing value was updated.
+  bool insert(const K &key, const V &value)
   {
     // Exclusive lock to enable single write in the bucket
     std::unique_lock<std::shared_timed_mutex> lock(mutex_);
@@ -63,17 +64,19 @@ public:
       if ((*node)->getKey() == key)
       {
         (*node)->setValue(value); // Key found in bucket, update the value
-        return;
+        return false;
       }
       node = &((*node)->next);
     }
 
     // now node points to the last element's ->next (or head), so the new node can be linked unconditionally
     *node = new HashNode<K, V>(key, value);
+    return true;
   }
 
-  // Function to remove an entry from the bucket, if found
-  void erase(const K &key)
+  // Function to remove an entry from the bucket, if found.
+  // Returns true if a node was removed, false if the key was not present.
+  bool erase(const K &key)
   {
     // Exclusive lock to enable single write in the bucket
     std::unique_lock<std::shared_timed_mutex> lock(mutex_);
@@ -86,7 +89,7 @@ public:
       {
         *prev = node->next;
         delete node;
-        return;
+        return true;
       }
       else
       {
@@ -94,9 +97,10 @@ public:
         node = node->next;
       }
     }
+    return false;
   }
 
-  // Function to clear the bucket
+  // Function to clear the bucket. All nodes are removed; the head becomes nullptr.
   void clear()
   {
     // Exclusive lock to enable single write in the bucket
@@ -111,8 +115,27 @@ public:
     }
   }
 
+  // Move the whole node chain out of the bucket (used by HashMap resize; caller
+  // must guarantee exclusive access, i.e. the table is locked for writing).
+  HashNode<K, V> *stealEntries()
+  {
+    std::unique_lock<std::shared_timed_mutex> lock(mutex_);
+    HashNode<K, V> *entries = head;
+    head = nullptr;
+    return entries;
+  }
+
+  // Prepend a single node to the bucket (used by HashMap resize; caller owns
+  // the node and guarantees exclusive access).
+  void adoptEntry(HashNode<K, V> *node)
+  {
+    std::unique_lock<std::shared_timed_mutex> lock(mutex_);
+    node->next = head;
+    head = node;
+  }
+
 private:
-  HashNode<K, V> *head = nullptr;         // The head node of the bucket
+  HashNode<K, V> *head;                  // The head node of the bucket
   mutable std::shared_timed_mutex mutex_; // The mutex for this bucket
 };
 } // namespace CTSL
